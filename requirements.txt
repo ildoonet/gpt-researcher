@@ -29,4 +29,7 @@ mistune
 python-docx
 htmldocx
 langchain-google-genai
+langchain-google-vertexai
 lxml[html_clean]
+groq
+langchain-groq

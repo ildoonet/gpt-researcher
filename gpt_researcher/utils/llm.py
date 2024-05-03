@@ -27,7 +27,12 @@ def get_provider(llm_provider):
         case "google":
             from ..llm_provider import GoogleProvider
             llm_provider = GoogleProvider
-
+        case "vertexai":
+            from ..llm_provider import VertexAIProvider
+            llm_provider = VertexAIProvider
+        case "groq":
+            from ..llm_provider import GroqProvider
+            llm_provider = GroqProvider
         case _:
             raise Exception("LLM provider not found.")
 
@@ -98,7 +103,7 @@ def choose_agent(smart_llm_model: str, llm_provider: str, task: str) -> dict:
             messages=[
                 {"role": "system", "content": f"{auto_agent_instructions()}"},
                 {"role": "user", "content": f"task: {task}"}],
-            temperature=0,
+            temperature=0.0001,
             llm_provider=llm_provider
         )
         agent_dict = json.loads(response)
@@ -128,6 +133,23 @@ async def construct_subtopics(task: str, data: str, config, subtopics: list = []
         elif config.llm_provider == "azureopenai":
             from langchain_openai import AzureChatOpenAI
             model = AzureChatOpenAI(model=config.smart_llm_model)
+        elif config.llm_provider == "vertexai":
+            from langchain_google_vertexai import ChatVertexAI
+            import vertexai
+            import os
+
+            vertexai.init(project='language-model-project', location='us-central1')
+            model = ChatVertexAI(
+                model=config.smart_llm_model,
+                temperature=0.1,
+                google_api_key=os.environ["GEMINI_API_KEY"]
+            )
+        elif config.llm_provider == "groq":
+            from langchain_groq import ChatGroq
+            model = ChatGroq(
+                model_name=config.smart_llm_model,
+                temperature=0.1
+            )
         else:
             return []
 

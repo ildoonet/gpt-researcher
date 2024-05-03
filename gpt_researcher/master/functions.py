@@ -2,6 +2,7 @@ import asyncio
 import json
 
 import markdown
+import re
 
 from gpt_researcher.master.prompts import *
 from gpt_researcher.scraper.scraper import Scraper
@@ -68,7 +69,7 @@ async def choose_agent(query, cfg):
             messages=[
                 {"role": "system", "content": f"{auto_agent_instructions()}"},
                 {"role": "user", "content": f"task: {query}"}],
-            temperature=0,
+            temperature=0.0001,
             llm_provider=cfg.llm_provider
         )
         agent_dict = json.loads(response)
@@ -90,15 +91,23 @@ async def get_sub_queries(query: str, agent_role_prompt: str, cfg, parent_query:
 
     """
     max_research_iterations = cfg.max_iterations if cfg.max_iterations else 1
-    response = await create_chat_completion(
-        model=cfg.smart_llm_model,
-        messages=[
-            {"role": "system", "content": f"{agent_role_prompt}"},
-            {"role": "user", "content": generate_search_queries_prompt(query, parent_query, report_type, max_iterations=max_research_iterations)}],
-        temperature=0,
-        llm_provider=cfg.llm_provider
-    )
-    sub_queries = json.loads(response)
+    sub_queries = []
+    for _ in range(5):
+        try:
+            response = await create_chat_completion(
+                model=cfg.smart_llm_model,
+                messages=[
+                    {"role": "system", "content": f"{agent_role_prompt}"},
+                    {"role": "user", "content": generate_search_queries_prompt(query, parent_query, report_type, max_iterations=max_research_iterations)}],
+                temperature=0.0001,
+                llm_provider=cfg.llm_provider
+            )
+            pattern = r'\[.*?\]'
+            response = re.findall(pattern, response.replace('\n', ' '))[0]
+            sub_queries = json.loads(response)
+            break
+        except Exception as e:
+            print(e, response if 'response' in locals() else "No response")
     return sub_queries
 
 
@@ -192,7 +201,7 @@ async def summarize_url(query, raw_data, agent_role_prompt, cfg):
             messages=[
                 {"role": "system", "content": f"{agent_role_prompt}"},
                 {"role": "user", "content": f"{generate_summary_prompt(query, raw_data)}"}],
-            temperature=0,
+            temperature=0.0001,
             llm_provider=cfg.llm_provider
         )
     except Exception as e:
@@ -241,7 +250,7 @@ async def generate_report(
             messages=[
                 {"role": "system", "content": f"{agent_role_prompt}"},
                 {"role": "user", "content": content}],
-            temperature=0,
+            temperature=0.001,
             llm_provider=cfg.llm_provider,
             stream=True,
             websocket=websocket,
@@ -276,7 +285,7 @@ async def get_report_introduction(query, context, role, config, websocket=None):
             messages=[
                 {"role": "system", "content": f"{role}"},
                 {"role": "user", "content": generate_report_introduction(query, context)}],
-            temperature=0,
+            temperature=0.0001,
             llm_provider=config.llm_provider,
             stream=True,
             websocket=websocket,
