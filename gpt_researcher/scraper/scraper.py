@@ -1,4 +1,4 @@
-from concurrent.futures.thread import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 
 import requests
@@ -33,10 +33,25 @@ class Scraper:
         Extracts the content from the links
         """
         partial_extract = partial(self.extract_data_from_link, session=self.session)
+        tasks = []
+        results = []
+
         with ThreadPoolExecutor(max_workers=20) as executor:
-            contents = executor.map(partial_extract, self.urls)
-        res = [content for content in contents if content["raw_content"] is not None]
-        return res
+            # 작업 제출
+            for url in self.urls:
+                task = executor.submit(partial_extract, url)
+                tasks.append(task)
+            
+            # 결과 수집 with 타임아웃
+            for future in as_completed(tasks, timeout=5):
+                try:
+                    result = future.result(timeout=5)  # 각 작업에 대해 최대 대기
+                    if result['raw_content'] is not None:
+                        results.append(result)
+                except Exception as e:
+                    print(f"Task failed with exception: {e}")
+        
+        return results
 
     def extract_data_from_link(self, link, session):
         """
