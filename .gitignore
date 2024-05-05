@@ -27,3 +27,4 @@ node_modules
 .docusaurus
 build
 docs/build
+dump.rdb
