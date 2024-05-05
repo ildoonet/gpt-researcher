@@ -3,10 +3,13 @@ import json
 
 import markdown
 import re
+import time
 
 from gpt_researcher.master.prompts import *
 from gpt_researcher.scraper.scraper import Scraper
 from gpt_researcher.utils.llm import *
+from rq import Queue, Retry
+from redis import Redis
 
 def get_retriever(retriever):
     """
@@ -63,19 +66,20 @@ async def choose_agent(query, cfg):
         agent: Agent name
         agent_role_prompt: Agent role prompt
     """
-    try:
-        response = await create_chat_completion(
-            model=cfg.smart_llm_model,
-            messages=[
-                {"role": "system", "content": f"{auto_agent_instructions()}"},
-                {"role": "user", "content": f"task: {query}"}],
-            temperature=0.0001,
-            llm_provider=cfg.llm_provider
-        )
-        agent_dict = json.loads(response)
-        return agent_dict["server"], agent_dict["agent_role_prompt"]
-    except Exception as e:
-        return "Default Agent", "You are an AI critical thinker research assistant. Your sole purpose is to write well written, critically acclaimed, objective and structured reports on given text."
+    return "Default Agent", "You are an AI critical thinker research assistant. Your sole purpose is to write well written, critically acclaimed, objective and structured reports on given text."
+    # try:
+    #     response = await create_chat_completion(
+    #         model=cfg.smart_llm_model,
+    #         messages=[
+    #             {"role": "system", "content": f"{auto_agent_instructions()}"},
+    #             {"role": "user", "content": f"task: {query}"}],
+    #         temperature=0.0001,
+    #         llm_provider=cfg.llm_provider
+    #     )
+    #     agent_dict = json.loads(response)
+    #     return agent_dict["server"], agent_dict["agent_role_prompt"]
+    # except Exception as e:
+    #     return "Default Agent", "You are an AI critical thinker research assistant. Your sole purpose is to write well written, critically acclaimed, objective and structured reports on given text."
 
 
 async def get_sub_queries(query: str, agent_role_prompt: str, cfg, parent_query: str, report_type:str):
@@ -124,10 +128,46 @@ def scrape_urls(urls, cfg=None):
     """
     content = []
     user_agent = cfg.user_agent if cfg else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0"
+    if cfg and cfg.use_worker:
+        TIMEOUT = 10
+        INTERVAL = 20
+
+        q = Queue(connection=Redis(), default_timeout=TIMEOUT)
+        jobs = []
+        for url in urls:
+            job = q.enqueue(run_scraper, [url], user_agent, cfg.scraper, retry=Retry(max=1))
+            jobs.append(job)
+        
+        for job in jobs:
+            if not job.is_finished:
+                time.sleep(0.1)
+                continue
+            c = job.return_value()
+            if c is None:
+                continue
+            content.extend(c)
+    else:
+        content = run_scraper(urls, user_agent, cfg.scraper)
+    return content
+
+
+def run_scraper(urls, user_agent, cfg_scraper):
+    """
+    Runs the scraper
+    Args:
+        url: URL
+        user_agent: User agent
+        cfg_scraper: Scraper config
+
+    Returns:
+        content: str
+
+    """
+    content = []
     try:
-        content = Scraper(urls, user_agent, cfg.scraper).run()
+        content = Scraper(urls, user_agent, cfg_scraper).run()
     except Exception as e:
-        print(f"{Fore.RED}Error in scrape_urls: {e}{Style.RESET_ALL}")
+        print(f"{Fore.RED}Error in run_scraper: {e}{Style.RESET_ALL}")
     return content
 
 

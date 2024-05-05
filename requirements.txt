@@ -32,3 +32,5 @@ lxml[html_clean]
 groq
 langchain-groq
 websockets
+rq
+redis

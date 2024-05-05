@@ -6,7 +6,8 @@ from gpt_researcher.context.compression import ContextCompressor
 from gpt_researcher.master.functions import *
 from gpt_researcher.memory import Memory
 from gpt_researcher.utils.enum import ReportType
-
+from rq import Queue, Retry
+from redis import Redis
 
 class GPTResearcher:
     """
@@ -196,7 +197,18 @@ class GPTResearcher:
         """
         # Get Urls
         retriever = self.retriever(sub_query)
-        search_results = retriever.search(max_results=self.cfg.max_search_results_per_query)
+        if not self.cfg.use_worker:
+            search_results = retriever.search(max_results=self.cfg.max_search_results_per_query)
+        else:
+            q = Queue(connection=Redis())
+            search_results = q.enqueue(retriever.search, 
+                                       max_results=self.cfg.max_search_results_per_query,
+                                       retry=Retry(max=1))
+            while not search_results.is_finished:
+                await asyncio.sleep(0.5)
+            search_results = search_results.return_value()
+            if search_results is None:
+                search_results = []
         new_search_urls = await self.get_new_urls([url.get("href") for url in search_results])
 
         # Scrape Urls
