@@ -32,6 +32,9 @@ def generate_report_prompt(question, context, report_format="apa", total_words=1
     Returns: str: The report prompt for the given question and research summary
     """
 
+    # TODO 
+    context = str(context)[:12000]
+
     return f'Information: """{context}"""\n\n' \
            f'Using the above information, answer the following' \
            f' query or task: "{question}" in a detailed report --' \

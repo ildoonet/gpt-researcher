@@ -115,7 +115,7 @@ async def get_sub_queries(query: str, agent_role_prompt: str, cfg, parent_query:
     return sub_queries
 
 
-def scrape_urls(urls, cfg=None):
+async def scrape_urls(urls, cfg=None):
     """
     Scrapes the urls
     Args:
@@ -129,7 +129,7 @@ def scrape_urls(urls, cfg=None):
     content = []
     user_agent = cfg.user_agent if cfg else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0"
     if cfg and cfg.use_worker:
-        TIMEOUT = 10
+        TIMEOUT = 7
         INTERVAL = 20
 
         q = Queue(connection=Redis(), default_timeout=TIMEOUT)
@@ -139,9 +139,9 @@ def scrape_urls(urls, cfg=None):
             jobs.append(job)
         
         for job in jobs:
-            if not job.is_finished:
-                time.sleep(0.1)
-                continue
+            while not job.is_finished:
+                asyncio.sleep(0.2)
+                
             c = job.return_value()
             if c is None:
                 continue

@@ -80,7 +80,7 @@ class GPTResearcher:
         else:
             self.context = await self.get_context_by_search(self.query)
 
-        time.sleep(2)
+        # time.sleep(2)
 
     async def write_report(self, existing_headers: list = []):
         """
@@ -125,7 +125,7 @@ class GPTResearcher:
         await stream_output("logs",
                             f"🧠 I will conduct my research based on the following urls: {new_search_urls}...",
                             self.websocket)
-        scraped_sites = scrape_urls(new_search_urls, self.cfg)
+        scraped_sites = await scrape_urls(new_search_urls, self.cfg)
         return await self.get_similar_content_by_query(self.query, scraped_sites)
 
     async def get_context_by_search(self, query):
@@ -162,7 +162,9 @@ class GPTResearcher:
         await stream_output("logs", f"\n🔎 Running research for '{sub_query}'...", self.websocket)
 
         scraped_sites = await self.scrape_sites_by_query(sub_query)
+        await stream_output("logs", f"🤷 '{sub_query}'...#={len(scraped_sites)}", self.websocket)
         content = await self.get_similar_content_by_query(sub_query, scraped_sites)
+        await stream_output("logs", f"🤷 '{sub_query}'---#={len(content)}", self.websocket)
 
         if content:
             await stream_output("logs", f"📃 {content}", self.websocket)
@@ -170,7 +172,7 @@ class GPTResearcher:
             await stream_output("logs", f"🤷 No content found for '{sub_query}'...", self.websocket)
         return content
 
-    async def get_new_urls(self, url_set_input):
+    async def get_new_urls(self, url_set_input, sub_query=''):
         """ Gets the new urls from the given url set.
         Args: url_set_input (set[str]): The url set to get the new urls from
         Returns: list[str]: The new urls from the given url set
@@ -179,7 +181,7 @@ class GPTResearcher:
         new_urls = []
         for url in url_set_input:
             if url not in self.visited_urls:
-                await stream_output("logs", f"✅ Adding source url to research: {url}\n", self.websocket)
+                await stream_output("logs", f"✅ Adding source url to research({sub_query}): {url}\n", self.websocket)
 
                 self.visited_urls.add(url)
                 new_urls.append(url)
@@ -200,7 +202,7 @@ class GPTResearcher:
         if not self.cfg.use_worker:
             search_results = retriever.search(max_results=self.cfg.max_search_results_per_query)
         else:
-            q = Queue(connection=Redis())
+            q = Queue(connection=Redis(), default_timeout=10)
             search_results = q.enqueue(retriever.search, 
                                        max_results=self.cfg.max_search_results_per_query,
                                        retry=Retry(max=1))
@@ -209,21 +211,24 @@ class GPTResearcher:
             search_results = search_results.return_value()
             if search_results is None:
                 search_results = []
-        new_search_urls = await self.get_new_urls([url.get("href") for url in search_results])
+        new_search_urls = await self.get_new_urls([url.get("href") for url in search_results], sub_query)
 
         # Scrape Urls
         # await stream_output("logs", f"📝Scraping urls {new_search_urls}...\n", self.websocket)
-        await stream_output("logs", f"🤔 Researching for relevant information...\n", self.websocket)
-        scraped_content_results = scrape_urls(new_search_urls, self.cfg)
+        await stream_output("logs", f"🤔 Researching for relevant information...{sub_query} #={len(new_search_urls)}\n", self.websocket)
+        scraped_content_results = await scrape_urls(new_search_urls, self.cfg)
         return scraped_content_results
 
     async def get_similar_content_by_query(self, query, pages):
         await stream_output("logs", f"📝 Getting relevant content based on query: {query}...", self.websocket)
-        # Summarize Raw Data
-        context_compressor = ContextCompressor(
-            documents=pages, embeddings=self.memory.get_embeddings())
-        # Run Tasks
-        return context_compressor.get_context(query, max_results=8)
+        if self.cfg.use_worker:
+            q = Queue(connection=Redis(), default_timeout=10)
+            search_results = q.enqueue(_get_similar_content_by_query, self.cfg.embedding_provider, query, pages, retry=Retry(max=1))
+            while not search_results.is_finished:
+                await asyncio.sleep(0.5)
+            return search_results.return_value()
+        else:
+            return _get_similar_content_by_query(self.cfg.embedding_provider, query, pages)
 
     ########################################################################################
 
@@ -256,3 +261,11 @@ class GPTResearcher:
         await stream_output("logs", f"📋Subtopics: {subtopics}", self.websocket)
 
         return subtopics
+
+
+def _get_similar_content_by_query(embedding_provider, query, pages):
+        # Summarize Raw Data
+        memory = Memory(embedding_provider)
+        context_compressor = ContextCompressor(documents=pages, embeddings=memory.get_embeddings())
+        # Run Tasksx
+        return context_compressor.get_context(query, max_results=8)
