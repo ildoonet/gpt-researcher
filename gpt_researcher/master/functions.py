@@ -55,10 +55,12 @@ def get_retriever(retriever):
     return retriever
 
 
-async def choose_agent(query, cfg):
+async def choose_agent(query, cfg, parent_query=None):
     """
     Chooses the agent automatically
     Args:
+        parent_query: In some cases the research is conducted on a subtopic from the main query.
+        Tge parent query allows the agent to know the main context for better reasoning.
         query: original query
         cfg: Config
 
@@ -67,13 +69,15 @@ async def choose_agent(query, cfg):
         agent_role_prompt: Agent role prompt
     """
     return "Default Agent", "You are an AI critical thinker research assistant. Your sole purpose is to write well written, critically acclaimed, objective and structured reports on given text."
+    
+    # query = f"{parent_query} - {query}" if parent_query else f"{query}"
     # try:
     #     response = await create_chat_completion(
     #         model=cfg.smart_llm_model,
     #         messages=[
     #             {"role": "system", "content": f"{auto_agent_instructions()}"},
     #             {"role": "user", "content": f"task: {query}"}],
-    #         temperature=0.0001,
+    #         temperature=0,
     #         llm_provider=cfg.llm_provider
     #     )
     #     agent_dict = json.loads(response)
