@@ -43,9 +43,9 @@ class Scraper:
                 tasks.append(task)
             
             # 결과 수집 with 타임아웃
-            for future in as_completed(tasks, timeout=10):
+            for future in as_completed(tasks, timeout=15):
                 try:
-                    result = future.result(timeout=10)  # 각 작업에 대해 최대 대기
+                    result = future.result(timeout=15)  # 각 작업에 대해 최대 대기
                     if result['raw_content'] is not None:
                         results.append(result)
                 except Exception as e:

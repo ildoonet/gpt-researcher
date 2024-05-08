@@ -34,3 +34,6 @@ langchain-groq
 websockets
 rq
 redis
+flask
+colored
+trafilatura

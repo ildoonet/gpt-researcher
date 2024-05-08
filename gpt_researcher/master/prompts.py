@@ -22,6 +22,7 @@ def generate_search_queries_prompt(question: str, parent_query: str, report_type
     return f'Write {max_iterations} google search queries to search online that form an objective opinion from the following task: "{task}"' \
            f'Use the current date if needed: {datetime.now().strftime("%B %d, %Y")}.\n' \
            f'Also include in the queries specified task details such as locations, names, etc.\n' \
+           f'Do NOT use site:...!!!' \
            f'Important! You must respond with a list of strings in the following format: ["query 1", "query 2", "query 3"].'
 
 
@@ -44,20 +45,7 @@ def generate_report_prompt(question, context, report_format="apa", total_words=1
            "You must write the report with markdown syntax.\n " \
            f"Use an unbiased and journalistic tone. \n" \
            "You MUST determine your own concrete and valid opinion based on the given information. Do NOT deter to general and meaningless conclusions.\n" \
-           f"You MUST write all used source urls at the end of the report as references, and make sure to not add duplicated sources, but only one reference for each.\n" \
-           "Every url should be hyperlinked: [url website](url)"\
-           """
-            Additionally, you MUST include hyperlinks to the relevant URLs wherever they are referenced in the report : 
-        
-            eg:    
-                # Report Header
-                
-                This is a sample text. ([url website](url))
-            """\
-            f"You MUST write the report in {report_format} format.\n " \
-            f"Cite search results using inline notations. Only cite the most \
-            relevant results that answer the query accurately. Place these citations at the end \
-            of the sentence or paragraph that reference them.\n"\
+            f"You MUST write the report in {report_format} format, but without any reference section.\n " \
             f"Please do your best, this is very important to my career. " \
             f"Assume that the current date is {datetime.now().strftime('%B %d, %Y')}"
 

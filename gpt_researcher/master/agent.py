@@ -1,5 +1,6 @@
 import asyncio
 import time
+from collections import defaultdict
 
 from gpt_researcher.config import Config
 from gpt_researcher.context.compression import ContextCompressor
@@ -50,6 +51,7 @@ class GPTResearcher:
         self.cfg = Config(config_path)
         self.retriever = get_retriever(self.cfg.retriever)
         self.context = []
+        self.context_by_query = defaultdict(list)
         self.source_urls = source_urls
         self.memory = Memory(self.cfg.embedding_provider)
         self.visited_urls = visited_urls
@@ -165,6 +167,8 @@ class GPTResearcher:
         await stream_output("logs", f"🤷 '{sub_query}'...#={len(scraped_sites)}", self.websocket)
         content = await self.get_similar_content_by_query(sub_query, scraped_sites)
         await stream_output("logs", f"🤷 '{sub_query}'---#={len(content)}", self.websocket)
+
+        self.context_by_query[sub_query] = content
 
         if content:
             await stream_output("logs", f"📃 {content}", self.websocket)
